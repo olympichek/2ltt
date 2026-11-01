@@ -51,7 +51,7 @@ namespace SemiSimplexCat
   @[simp]
   theorem obj.beta (n : SemiSimplexCat) : rank.obj n = n := by
     rfl
-  
+
   def rank.map : ∀ {n m : SemiSimplexCat}, Hom n m → nat_cat.Hom n m := by
     intro (n : Nat) (m : Nat) f
     apply ULift.up
@@ -246,6 +246,14 @@ end
 def SemiSimplicialType (n : ℕ) : Typeₒ :=
   finite_reedy_presheaf_is_fibrant SemiSimplexCat n
     SemiSimplexCat.finite_rank SemiSimplexCat.finite_hom |>.obj_type
+
+
+/-- Conjecture: no inner family indexed by `Natₒ` agrees with
+`SemiSimplicialType` at every outer natural number. -/
+theorem semi_simplicial_type_not_internal :
+    ¬ ∃ τ : Natₒ →ₒ Typeₒ,
+      ∀ n : Nat, τ (Natₒ.ofNat n) = SemiSimplicialType n := by
+  sorry
 
 end Tltt
 end
