@@ -2,7 +2,6 @@ import Lean
 
 open Lean (
   registerTraceClass
-  HashMap
   Name
   Syntax
 )
@@ -59,7 +58,7 @@ initialize registerTraceClass `Tltt.inductiveₒ.constr (inherited := true)
 initialize registerTraceClass `Tltt.inductiveₒ.names (inherited := true)
 initialize registerTraceClass `Tltt.inductiveₒ.universes (inherited := true)
 
-abbrev InductiveTypeMap := HashMap Name ObjInductiveView
+abbrev InductiveTypeMap := Std.HashMap Name ObjInductiveView
 initialize obj_inductive_types : IO.Ref InductiveTypeMap ← IO.mkRef {}
 
 syntax "todo!" : term

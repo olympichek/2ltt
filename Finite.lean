@@ -60,11 +60,11 @@ def pi_eqv_pi_prod {α : Type*} {β : α → Type*} [DecidableEq α] (x : α)
 instance finite_decidable_eq {α : Type*} [ι : Finite α] : DecidableEq α := by
   intro x y
   if h : ι.equiv x = ι.equiv y then
-    right
+    apply Decidable.isTrue
     apply ι.equiv.injective
     assumption
   else
-    left
+    apply Decidable.isFalse
     intro x_eq_y
     apply h
     congr
@@ -74,7 +74,8 @@ def el_of_card_succ {α : Type*} [Finite α] (p : |α| > 0) : α := by
   apply Fin.mk 0
   exact p
 
-instance finite_inhabited {α : Type*} [Finite α] (p : |α| > 0) : Inhabited α where
+@[instance_reducible]
+def finite_inhabited {α : Type*} [Finite α] (p : |α| > 0) : Inhabited α where
   default := el_of_card_succ p
 
 def arg_max {α : Type _} [ι : Finite α] (f : α → Nat) (x : α) : α :=
@@ -189,7 +190,7 @@ instance finite_of_remove_one {α : Type*} [ι : Finite α] (x : α) : Finite { 
         else
           Fin.mk (y_idx-1) <| by
             apply Nat.pred_lt_pred
-            · apply Nat.not_eq_zero_of_lt
+            · apply Nat.ne_zero_of_lt
               simp
               apply Nat.lt_of_not_le
               exact h
@@ -200,7 +201,7 @@ instance finite_of_remove_one {α : Type*} [ι : Finite α] (x : α) : Finite { 
             trans |α|-1
             · exact i.isLt
             · apply Nat.pred_lt
-              apply Nat.not_eq_zero_of_lt
+              apply Nat.ne_zero_of_lt
               simp
               calc
                 _ < |α|-1 := i.isLt
@@ -210,7 +211,7 @@ instance finite_of_remove_one {α : Type*} [ι : Finite α] (x : α) : Finite { 
             have : x_idx.val = i.val := calc x_idx.val
               _ = ι.equiv x := rfl
               _ = ι.equiv y := by rw [y_eq_x]
-              _ = i.val := by unfold_let y; simp
+              _ = i.val := by dsimp only [y]; simp
             apply lt_irrefl (α := Nat)
             rewrite [this] at h
             assumption
@@ -221,7 +222,7 @@ instance finite_of_remove_one {α : Type*} [ι : Finite α] (x : α) : Finite { 
             have : x_idx.val = i.val+1 := calc x_idx.val
               _ = ι.equiv x := rfl
               _ = ι.equiv y := by rw [y_eq_x]
-              _ = i.val+1 := by unfold_let y; simp
+              _ = i.val+1 := by dsimp only [y]; simp
             apply lt_irrefl (α := Nat)
             calc x_idx.val
               _ ≤ i := by apply Nat.le_of_not_lt; exact h
@@ -271,7 +272,7 @@ instance finite_of_remove_one {α : Type*} [ι : Finite α] (x : α) : Finite { 
         · simp
         · simp at h₂
           exfalso
-          apply LT.lt.not_lt (α := Nat)
+          apply Nat.lt_asymm
           exact h₁
           exact h₂
         · simp
@@ -288,17 +289,16 @@ def finite_of_add_one {α : Type*} [DecidableEq α] {x : α} (ι : Finite { y : 
   equiv := {
     toFun := fun y =>
       if h : y = x then
-        |{ y // y ≠ x}|
+        Fin.last |{ y // y ≠ x}|
       else
-        ι.equiv ⟨y, h⟩
+        (ι.equiv ⟨y, h⟩).castSucc
     invFun := fun i =>
-      if h : i = |{ y // y ≠ x}| then
+      if h : i = Fin.last |{ y // y ≠ x}| then
         x
       else
         ι.equiv.invFun <| .mk i <| by
           apply Nat.lt_of_le_of_ne
-          · apply Nat.le_of_lt_succ
-            simp
+          · exact Nat.le_of_lt_succ i.isLt
           · intro e
             apply h
             apply Fin.eq_of_val_eq
@@ -306,19 +306,7 @@ def finite_of_add_one {α : Type*} [DecidableEq α] {x : α} (ι : Finite { y : 
             assumption
     left_inv := by
       intro y
-      simp [-dite_eq_left_iff]
-      split <;> rename_i h <;> simp
-      · apply h.symm
-      · intro y_is_last
-        exfalso
-        generalize_proofs at y_is_last
-        apply lt_irrefl (α := Nat) |{ y // y ≠ x }|
-        calc |{ y // y ≠ x }|
-          _ = ι.equiv ⟨y, h⟩ := by
-            show (Fin.last _).val = _
-            rewrite [← y_is_last]
-            rfl
-          _ < _ := by apply Fin.isLt
+      by_cases h : y = x <;> simp [h]
     right_inv := by
       intro i
       simp [-dite_eq_left_iff]
@@ -341,7 +329,8 @@ def unique_card {α : Type*} (ι₁ : Finite α) (ι₂ : Finite α) : ι₁.car
 def card_of_remove_one {α : Type*} [Finite α] (x : α) : |{ y : α // y ≠ x }| = |α|-1 := by
   rfl
 
-instance is_finite_of_card_zero {α : Type*} [Finite α] (p : |α| = 0) : IsEmpty α where
+@[instance_reducible]
+def is_finite_of_card_zero {α : Type*} [Finite α] (p : |α| = 0) : IsEmpty α where
   false := by
     intro a
     apply Nat.not_lt_zero

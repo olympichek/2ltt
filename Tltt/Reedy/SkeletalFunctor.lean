@@ -15,68 +15,45 @@ def Sk (n : Nat) (A : Psh D) : Psh D where
     if rk d.unop < n then A.obj d else Empty
 
   map {j i} f := by
-    dsimp only
+    refine ↾?_
     if h : rk j.unop < n then
       have rk_i_lt_n : rk i.unop < n := calc
         rk i.unop ≤ rk j.unop := leq_of_map f.unop
         rk j.unop < n := h
-      have h₁ : (if rk j.unop < n then A.obj j else Empty) = A.obj j := by
-        simp
-        intro
-        exfalso
-        apply Nat.not_lt_of_le <;> assumption
-      have h₂ : (if rk i.unop < n then A.obj i else Empty) = A.obj i := by
-        simp
-        intro
-        exfalso
-        apply Nat.not_lt_of_le <;> assumption
+      have h₁ : (if rk j.unop < n then A.obj j else Empty) = A.obj j := ite_eq_left h
+      have h₂ : (if rk i.unop < n then A.obj i else Empty) = A.obj i := ite_eq_left rk_i_lt_n
       exact eqToHom h₂.symm ∘ A.map f ∘ eqToHom h₁
     else
-      have h₁ : (if rk j.unop < n then A.obj j else Empty) = Empty := by
-        simp
-        intro
-        contradiction
+      have h₁ : (if rk j.unop < n then A.obj j else Empty) = Empty := ite_eq_right h
       refine ?map ∘ eqToHom h₁
       intro
       contradiction
 
   map_id := by
     intro j
-    simp
-    intro h
-    funext a
-    have : (if rk j.unop < n then A.obj j else Empty) = Empty := by
-      simp
-      intro
-      exfalso
-      apply Nat.not_lt_of_le
-      exact h
-      assumption
-    rw [this] at a
-    contradiction
+    apply ConcreteCategory.ext_apply
+    intro x
+    by_cases h : rk j.unop < n
+    · simp [h]
+    · have h₁ : (if rk j.unop < n then A.obj j else Empty) = Empty := ite_eq_right h
+      rw [h₁] at x
+      contradiction
 
   map_comp := by
-    intro ⟨j⟩ ⟨i⟩ ⟨k⟩ f g
-    simp
-    split_ifs <;> rename_i h
-    · generalize_proofs pf₁ pf₂ pf₃ pf₄ pf₅ pf₆ pf₇
-      conv =>
-        rhs
-        erw [apply_dite (CategoryStruct.comp (obj := Type _) (eqToHom pf₃ ∘ A.map f ∘ eqToHom pf₂) ·)]
-      erw [apply_dite (eqToHom pf₁ ∘ (A.map f ≫ A.map g) ∘ eqToHom pf₂ = ·)]
-      split_ifs <;> rename_i h'
-      · generalize_proofs pf₈
-        show _ ∘ A.map g ∘ A.map f ∘ _ = _ ∘ _ ∘ _ ∘ _
-        show _ ∘ _ ∘ _ ∘ _ = eqToHom pf₁ ∘ A.map g ∘ (eqToHom pf₈ ∘ eqToHom pf₃) ∘ _
-        simp
-      · exfalso
-        apply Nat.lt_irrefl n
-        calc
-          n ≤ rk i := Nat.le_of_not_lt h'
-          rk i ≤ rk j := leq_of_map f.unop
-          rk j < n := h
-    · funext x
-      simp [h] at x
+    intro j i k f g
+    apply ConcreteCategory.ext_apply
+    intro x
+    by_cases h : rk j.unop < n
+    · have hi : rk i.unop < n := lt_of_le_of_lt (leq_of_map f.unop) h
+      simp only [h, hi, dite_eq_left, TypeCat.ofHom_apply, types_comp_apply,
+        Function.comp_apply, Functor.map_comp]
+      have cancel {α β : Type _} (p : α = β) (q : β = α) (y : α) :
+          eqToHom (C := Type _) q (eqToHom (C := Type _) p y) = y := by
+        cases p
+        rfl
+      erw [cancel]
+    · have h₁ : (if rk j.unop < n then A.obj j else Empty) = Empty := ite_eq_right h
+      rw [h₁] at x
       contradiction
 
 variable {n : Nat} (X : ReedyPresheaf D n) in

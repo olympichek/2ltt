@@ -34,7 +34,7 @@ open Lean.Meta (
 )
 
 namespace Tltt.Hott.Tactics.PathInduction
-  syntax (name := path_induction_obj) "path_inductionₒ " term (" with refl " term)? : tactic
+  syntax (name := path_induction_obj) "path_inductionₒ " term (" with " &"refl" ppSpace term)? : tactic
 
   def path_induction (path : FVarId) (name : Name) : TacticM Unit := do
     let mvarId ← getMainGoal

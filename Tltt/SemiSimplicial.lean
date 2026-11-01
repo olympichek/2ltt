@@ -7,6 +7,9 @@ import Mathlib.CategoryTheory.Category.Basic
 
 open CategoryTheory
 
+-- The ordinal category uses conversion through its semireducible Nat wrapper.
+set_option backward.isDefEq.respectTransparency false
+
 noncomputable section
 namespace Tltt
 open Hott
@@ -62,20 +65,20 @@ namespace SemiSimplexCat
         have i_lt_n : i < n := by
           apply Nat.lt_of_succ_lt
           assumption
-        simp_arith
+        simp +arith +decide
         calc i
           _ ≤ f ⟨i, i_lt_n⟩ := l i i_lt_n
           _ < f ⟨i+1, _⟩ := by
             apply f_inc
-            simp_arith
+            simp +arith +decide
       apply l
     match n with
     | 0 => simp
     | n+1 =>
-      have := this n
+      have := this (Fin.last n)
       simp at this
       calc n + 1
-        _ ≤ f n + 1 := by simp_arith; exact this
+        _ ≤ f (Fin.last n) + 1 := by simp +arith +decide; exact this
         _ ≤ m := by
           apply Nat.succ_le_of_lt
           apply Fin.isLt
@@ -112,7 +115,7 @@ namespace SemiSimplexCat
         induction b with
         | zero => simp
         | succ b ih =>
-          simp_arith
+          simp only [Nat.add_succ, Nat.succ_le_iff]
           have ab_lt_m' : a+b < m := by
             apply Nat.le_of_succ_le
             exact ab_lt_m
@@ -120,7 +123,7 @@ namespace SemiSimplexCat
             _ ≤ f ⟨a + b, ab_lt_m'⟩ := by apply ih
             _ < f ⟨a + b + 1, ab_lt_m⟩ := by
               apply q
-              simp_arith
+              simp +arith +decide
       have p₂ (a : Fin m) : a ≤ f a := by
         cases m
         case zero =>
@@ -130,7 +133,7 @@ namespace SemiSimplexCat
         case succ m _ _ =>
           calc ↑a
             _ ≤ (f ⟨0, Nat.zero_lt_succ m⟩).val + a := by apply Nat.le_add_left a
-            _ ≤ f ⟨0+a.val, by simp⟩ := by apply p₁ 0 a (Nat.zero_lt_succ m)
+            _ ≤ f ⟨0+a.val, by simpa using a.isLt⟩ := by apply p₁ 0 a (Nat.zero_lt_succ m)
             _ = f a := by simp
       have p₃ : a.val ≤ f a := p₂ a
       if h : a.val < f a then
@@ -175,11 +178,8 @@ namespace SemiSimplexCat
         rw [← a_eq_n]
         rfl
       right_inv := by
-        intro ⟨b, b_lt_one⟩
-        simp
-        ext
-        simp
-        omega
+        intro b
+        exact Subsingleton.elim _ b
     }
 end SemiSimplexCat
 

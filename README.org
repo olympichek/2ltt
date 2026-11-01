@@ -7,5 +7,12 @@ This repository contains an implementation of 2-level type theory in Lean, and, 
 proof-of-concept, the formalization of function extensionality in HoTT.  This entails that
 approximatively one third of the first part of the HoTT book is formalized.
 
-This repository is currently unmaintained, and was built with Lean 4.10.0, which is far behind
-from the current latest version of Lean 4.
+This repository uses Lean 4.35.0 and the matching mathlib release. Install [[https://github.com/leanprover/elan][elan]], then run:
+
+#+begin_src sh
+lake exe cache get
+lake build
+lake test
+#+end_src
+
+The Nix development shell supplies elan, which selects the compiler from =lean-toolchain=.

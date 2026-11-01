@@ -20,7 +20,9 @@ def border (j : J) : Psh J where
   obj i := { f : i.unop ⟶ j // i.unop ≠ j }
 
   map := by
-    intro ⟨l⟩ ⟨i⟩ f ⟨g, l_neq_j⟩
+    intro ⟨l⟩ ⟨i⟩ f
+    refine ↾?_
+    intro ⟨g, l_neq_j⟩
     have f := f.unop
     dsimp only at f g l_neq_j ⊢
     exists f ≫ g
@@ -47,14 +49,16 @@ def border (j : J) : Psh J where
   map_id := by
     intro ⟨i⟩
     dsimp only
-    funext ⟨f, i_neq_j⟩
+    apply ConcreteCategory.ext_apply
+    intro ⟨f, i_neq_j⟩
     simp
 
   map_comp := by
     intro ⟨i⟩ ⟨k⟩ ⟨l⟩ f g
     have f := f.unop
     have g := g.unop
-    funext ⟨h, i_neq_j⟩
+    apply ConcreteCategory.ext_apply
+    intro ⟨h, i_neq_j⟩
     dsimp only at f g h i_neq_j
     simp
 
@@ -62,13 +66,16 @@ macro " ∂" j:term : term => ``(border $j)
 
 def border_inc_yoneda (j : J) : NatTrans (∂j) (𝐲j) where
   app := by
-    intro ⟨i⟩ ⟨f, _⟩
+    intro ⟨i⟩
+    refine ↾?_
+    intro ⟨f, _⟩
     exact f
   naturality := by
     intro ⟨k⟩ ⟨l⟩ f
     have f := f.unop
     unfold border yoneda
-    funext ⟨g, k_neq_j⟩
+    apply ConcreteCategory.ext_apply
+    intro ⟨g, k_neq_j⟩
     dsimp only at f g k_neq_j
     simp
 
@@ -81,8 +88,9 @@ section
       app := by
         intro ⟨_, f, i_neq⟩
         simp [under.inclusion]
+        refine ↾?_
         intro η
-        apply η.app _
+        refine η.app _ ?_
         simp [restrict₃, border]
         exists f
         intro
@@ -92,7 +100,8 @@ section
       naturality := by
         intro ⟨j, f, i_neq_j⟩ ⟨k, g, i_neq_k⟩ ⟨h, p⟩
         simp at h p ⊢
-        funext η
+        apply ConcreteCategory.ext_apply
+        intro η
         simp [under.inclusion]
         let j' : Below J (rk i) := .mk j <| by
           apply Nat.lt_of_le_of_ne
@@ -113,17 +122,18 @@ section
         have := η.naturality (X := .op j') (Y := .op k') h.op
         dsimp [restrict₃, border, Below.forget] at this
         rw [← p]
-        exact congrFun this ⟨f, _⟩
+        exact ConcreteCategory.congr_hom this ⟨f, _⟩
     }
 
   def MatchObj : Type _ :=
     MatchObj.cone i X |>.pt
 
   def MatchObj.cone_is_limit : IsLimit (cone i X) where
-    lift ψ x := {
+    lift ψ := ↾fun x => {
       app := by
         intro ⟨j⟩
         simp [restrict₃, border]
+        refine ↾?_
         intro ⟨f, j_neq_i⟩
         have i_neq_j := Ne.symm j_neq_i
         have := ψ.π.app ⟨_, f, i_neq_j⟩ x
@@ -132,7 +142,8 @@ section
       naturality := by
         intro ⟨j⟩ ⟨k⟩ ⟨f⟩
         simp [restrict₃, border, Below.forget] at f ⊢
-        funext ⟨g, j_neq_i⟩
+        apply ConcreteCategory.ext_apply
+        intro ⟨g, j_neq_i⟩
         have i_neq_j := Ne.symm j_neq_i
         let j' : under i := .mk j.point <| by
           exists g
@@ -146,18 +157,22 @@ section
           rfl
         have := ψ.π.naturality (X := .op j') (Y := .op k') f'.op
         simp at this ⊢
-        exact congrFun this x
+        exact ConcreteCategory.congr_hom this x
     }
     fac ψ := by
       intro
-      funext
+      apply ConcreteCategory.ext_apply
+      intro x
       rfl
     uniq ψ := by
       intro m e
-      funext x
+      apply ConcreteCategory.ext_apply
+      intro x
       simp
       apply NatTrans.ext
-      funext ⟨j⟩ g
+      funext ⟨j⟩
+      apply ConcreteCategory.ext_apply
+      intro g
       simp [restrict₃, border, Below.forget] at g
       let j' : under i := .mk j.point <| by
         exists g
@@ -165,7 +180,7 @@ section
         exact g.property
       have := e (.op j')
       simp [cone] at this
-      apply congrFun this
+      apply ConcreteCategory.congr_hom this
 
   def match_obj_eqv (i : J) (F : Psh (Below J (rk i)))
                     : MatchObj i F ≃ MatchingObject i F := by

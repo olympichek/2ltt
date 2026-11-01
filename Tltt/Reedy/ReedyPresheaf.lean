@@ -108,6 +108,7 @@ namespace LayeredReedyPresheaf
             _ = rk i' := rfl
             _ < n := i'.rank_is_lt
         · intro j k f
+          apply ConcreteCategory.coe_ext
           apply Presheaf.LayeredPresheaf.ToPsh.map_rk_lt_n <;> simp <;> {
             apply Nat.ne_of_lt
             calc
@@ -209,10 +210,7 @@ namespace CompactLRP
     induction rk_i_eq_n
     have := cone.π.app ⟨j.point, f, this⟩
     dsimp [restrict₅, under.inclusion] at this
-    apply this
-    show MatchingObject _ _
-    dsimp only at z ⊢
-    exact z
+    exact this z
 
   abbrev is_reedy : is_reedy_up_to n (X self) :=
     self.X.is_reedy
@@ -224,7 +222,6 @@ namespace CompactLRP
     dsimp
     funext ⟨z, hello⟩
     simp
-    generalize_proofs pf₁ pf₂
     let cone := (MatchingObject.limit_cone i self.X.presheaf).cone
     let j' : under i := by
       exists j.point, f
@@ -244,7 +241,7 @@ namespace CompactLRP
       apply Below.rank_is_lt
     let g' : k' ⟶ j' := by exists g
     apply Eq.symm
-    apply congrFun <| cone.π.naturality (.op g')
+    exact ConcreteCategory.congr_hom (cone.π.naturality (.op g')) z
 
   abbrev layered_presheaf : Presheaf.LayeredPresheaf D n where
     X := X self
@@ -269,12 +266,8 @@ namespace CompactLRP
       simp [restrict₁, layered_presheaf, Presheaf.LayeredPresheaf.to_psh]
       rw [Presheaf.LayeredPresheaf.ToPsh.map_rk_lt_n]
       · rfl
-      repeat {
-        intro h
-        apply Nat.lt_irrefl n
-        conv => lhs; rw [← h]
-        apply Below.rank_is_lt
-      }
+      · exact Nat.ne_of_lt i.rank_is_lt
+      · exact Nat.ne_of_lt j.rank_is_lt
 
   abbrev is_fibrant : ∀ (i : OfRank D n),
                       is_reedy_at i.point (restrict₄ i (layered_presheaf self).to_psh) := by
@@ -319,7 +312,7 @@ namespace CompactLRP
       induction rk_i_eq_n
       simp at z
       have := l.is_fibrant (OfRank.in_own_layer i)
-      simp at this
+      dsimp [is_reedy_at, is_fibration_strict] at this
       cases this with | mk can hello =>
       apply can
       suffices h : restrict₁ (restrict₄ i l.to_psh) = l.X
@@ -336,15 +329,10 @@ namespace CompactLRP
           apply x.rank_is_lt
         · intro ⟨x⟩ ⟨y⟩ f
           simp [restrict₁, restrict₄]
-          apply Presheaf.LayeredPresheaf.ToPsh.map_rk_lt_n <;> {
-            simp
-            intro h
-            apply Nat.lt_irrefl (rk i)
-            conv =>
-              lhs
-              rw [← h]
-            apply Below.rank_is_lt
-          }
+          apply ConcreteCategory.coe_ext
+          apply Presheaf.LayeredPresheaf.ToPsh.map_rk_lt_n
+          · exact Nat.ne_of_lt x.rank_is_lt
+          · exact Nat.ne_of_lt y.rank_is_lt
           
   end OfLRP
 

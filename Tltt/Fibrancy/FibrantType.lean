@@ -5,8 +5,8 @@ noncomputable section
 namespace Tltt.Fibrancy
 open Hott
 
-class IsFibrantWeak (α : Type*) : Type _ where
-  obj_type : Typeₒ
+class IsFibrantWeak.{u, v} (α : Type u) : Type _ where
+  obj_type : Typeₒ v
   fibrancy : obj_type ≃ α
 
 class IsFibrantStrict (α : Type*) : Type _ where
@@ -38,7 +38,8 @@ instance unit_is_fibrant : IsFibrantWeak PUnit where
       rfl
   }
 
-instance fibrant_weakening {α : Type*} {ι : IsFibrantStrict α} : IsFibrantWeak α where
+@[instance_reducible]
+def fibrant_weakening {α : Type*} {ι : IsFibrantStrict α} : IsFibrantWeak α where
   obj_type := ι.obj_type
   fibrancy :=
     have h : ι.obj_type = α := ι.fibrancy

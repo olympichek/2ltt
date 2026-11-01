@@ -2,9 +2,9 @@ import Mathlib.CategoryTheory.Category.Basic
 import Mathlib.CategoryTheory.Elements
 import Mathlib.CategoryTheory.Limits.Cones
 import Mathlib.CategoryTheory.Limits.IsLimit
-import Mathlib.CategoryTheory.Limits.Types
+import Mathlib.CategoryTheory.Limits.Types.Limits
 import Mathlib.CategoryTheory.Limits.IsConnected
-import Mathlib.CategoryTheory.DiscreteCategory
+import Mathlib.CategoryTheory.Discrete.Basic
 import Mathlib.CategoryTheory.PEmpty
 
 noncomputable section
@@ -33,11 +33,12 @@ def unit_cone_of_presheaf_over_empty {J : Type*} [Category J] [IsEmpty J] (F : J
 
 def unit_cone_is_limit {J : Type*} [Category J] [IsEmpty J] {F : J ⥤ Type _}
                        : IsLimit (unit_cone_of_presheaf_over_empty F) where
-  lift _ _ := .unit
+  lift _ := ↾fun _ => .unit
   fac _ j := IsEmpty.false j |>.elim
   uniq := by
     intros
-    funext
+    apply ConcreteCategory.ext_apply
+    intro x
     rfl
 
 def lim {J : Type*} [Category J] (F : J ⥤ Type _) : Type _ :=
@@ -70,96 +71,84 @@ abbrev Psh (J : Type*) [Category J] :=
 def cone_of_nat_unit {J : Type*} [Category J] (X : Psh J) : Cone X where
   pt := NatTrans (constPUnitFunctor _) X
   π := {
-    app := by
-      simp
-      intro i u
-      apply u.app
-      exact .unit
+    app j := ↾fun u => u.app j .unit
     naturality := by
       intro j i f
-      funext u
-      dsimp at u ⊢
-      apply congrFun <| u.naturality _
+      apply ConcreteCategory.ext_apply
+      intro u
+      exact ConcreteCategory.congr_hom (u.naturality f) .unit
   }
 
 def cone_of_nat_unit_is_lim {J : Type*} [Category J] (X : Psh J) : IsLimit (cone_of_nat_unit X) where
-  lift ψ x := {
-    -- X ≡ ψ.pt
-    app :=
-      fun j _ => ψ.π.app j x
+  lift ψ := ↾fun x => {
+    app j := ↾fun _ => ψ.π.app j x
     naturality := by
       intro j i f
-      funext
-      simp
-      have := ψ.π.naturality (X := j) (Y := i) f
-      apply congrFun this
+      apply ConcreteCategory.ext_apply
+      intro _
+      exact ConcreteCategory.congr_hom (ψ.π.naturality f) x
   }
-  uniq ψ := by
-    intro m e
-    funext x
-    simp
+  uniq ψ m e := by
+    apply ConcreteCategory.ext_apply
+    intro x
     apply NatTrans.ext
-    funext
-    apply congrFun <| e _
-  fac ψ := by
-    intro j
-    funext x
+    funext j
+    apply ConcreteCategory.ext_apply
+    intro ⟨⟩
+    exact ConcreteCategory.congr_hom (e j) x
+  fac ψ j := by
+    apply ConcreteCategory.ext_apply
+    intro x
     rfl
 
 def limit {J : Type*} [Category J] (X : Psh J) : Type _ :=
   cone_of_nat_unit X |>.pt
 
 abbrev weighted_shape {J : Type*} [Category J] (A X : Psh J) : (Functor.Elements A) ⥤ Type _ where
-  obj x := X.obj x.fst
-  map {x y} f := X.map f.val
+  obj x := X.obj x.obj
+  map {x y} f := X.map f.hom
 
 abbrev cone_of_nat {J : Type*} [Category J] (A X : Psh J) : Cone (weighted_shape A X) where
   pt := NatTrans A X
   π := {
-    app := by
-      simp
-      intro ⟨j, a⟩ u
-      simp at u ⊢
-      apply u.app
-      exact a
+    app a := ↾fun u => u.app a.obj a.val
     naturality := by
-      intro ⟨j, aj⟩ ⟨i, ai⟩ ⟨f, h⟩
-      simp at h ⊢
-      funext u
-      simp
-      rw [← h]
-      apply congrFun <| u.naturality _
+      intro a b f
+      apply ConcreteCategory.ext_apply
+      intro u
+      change u.app b.obj b.val = X.map f.hom (u.app a.obj a.val)
+      rw [← f.map_val]
+      exact ConcreteCategory.congr_hom (u.naturality f.hom) a.val
   }
 
 def lim_of_weight_shape {J : Type*} [Category J] (A F : Psh J) : IsLimit (cone_of_nat A F) where
-  lift ψ x := {
-    -- X ≡ ψ.pt
-    app :=
-      fun j aj => ψ.π.app ⟨j, aj⟩ x
+  lift ψ := ↾fun x => {
+    app j := ↾fun aj => ψ.π.app (A.elementsMk j aj) x
     naturality := by
       intro j i f
-      funext aj
-      simp
-      have := ψ.π.naturality (X := ⟨j, aj⟩) (Y := ⟨i, A.map f aj⟩) ⟨f, by rfl⟩
-      apply congrFun this
+      apply ConcreteCategory.ext_apply
+      intro aj
+      exact ConcreteCategory.congr_hom
+        (ψ.π.naturality (Functor.Elements.homMk
+          (x := A.elementsMk j aj) (y := A.elementsMk i (A.map f aj)) f rfl)) x
   }
-  uniq ψ := by
-    intro m e
-    funext x
-    simp
-    ext
-    rename_i j aj
-    simp
-    apply congrFun <| e ⟨j, aj⟩
-  fac ψ := by
-    intro ⟨j, aj⟩
-    funext x
-    simp
+  uniq ψ m e := by
+    apply ConcreteCategory.ext_apply
+    intro x
+    apply NatTrans.ext
+    funext j
+    apply ConcreteCategory.ext_apply
+    intro aj
+    exact ConcreteCategory.congr_hom (e (A.elementsMk j aj)) x
+  fac ψ a := by
+    apply ConcreteCategory.ext_apply
+    intro x
+    rfl
 
 macro " 𝐲" j:term : term => ``(yoneda.obj $j)
 
 @[simp]
-theorem id_is_id {α : Type*} : 𝟙 α = id := by
+theorem id_is_id {α : Type*} : (𝟙 α : α → α) = id := by
   rfl
 
 def comp_op_is_app_op {α β γ : Type*} [Category α] [Category β] [Category γ] (F : α ⥤ β)

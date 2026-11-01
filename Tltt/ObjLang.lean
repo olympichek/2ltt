@@ -63,7 +63,6 @@ def lift.{i} (α : liftedU.{i}) : Type i := El α.intoU
 
 register_option pp.lift : Bool := {
   defValue := false
-  group := "pp"
   descr := "(pretty printing) display lift from object-level types to Lean types"
 }
 
@@ -142,7 +141,7 @@ syntax "Πₒ " ident " : " term ", " term : term
 macro_rules
   | `(Πₒ $x : $α, $P) => `(Pi $α (fun $x : $α => $P))
 
-macro "(" x:ident " : " α:term ") →ₒ " P:term : term => `(Pi $α (fun $x => $P))
+macro "(" x:ident " : " α:term ")" " →ₒ " P:term : term => `(Pi $α (fun $x => $P))
 
 @[app_unexpander Pi]
 def unexpand_pi : Unexpander
@@ -336,7 +335,6 @@ namespace InductiveDecl
     Declaration
     DeclarationRanges
     Expr
-    HashMap
     indentD
     InductiveType
     LMVarId
@@ -391,7 +389,6 @@ namespace InductiveDecl
     applyVisibility
     elabModifiers
     expandOptDeclSig
-    getDeclarationRange
     getDeclarationSelectionRef
     liftMacroM
     sortDeclLevelParams
@@ -400,12 +397,7 @@ namespace InductiveDecl
   open Lean.Elab.Command (
     CommandElab
     CommandElabM
-    accLevel
-    checkResultingUniverse
-    expandDeclId
-    mkResultUniverse
     runTermElabM
-    shouldInferResultUniverse
   )
   open Lean.Elab.Term (
     TermElabM
@@ -610,7 +602,7 @@ namespace InductiveDecl
 
   def get_inductive_type? (name : Name) : IO (Option ObjInductiveView) := do
     let map ← obj_inductive_types.get
-    return map.find? name
+    return map[name]?
 
   def check_obj_inductive_modifiers {m : Type → Type} [Monad m] [MonadError m]
                                     (modifiers : Modifiers) : m Unit := do
@@ -637,26 +629,26 @@ namespace InductiveDecl
                           : CommandElabM ObjInductiveView := do
     check_obj_inductive_modifiers modifiers
     let (binders, type?) := expandOptDeclSig declSig
-    let ⟨short_name, name, levelNames⟩ ← expandDeclId declId modifiers
+    let ⟨short_name, name, levelNames, _⟩ ← runTermElabM fun _ => do
+      Lean.Elab.expandDeclId (← Lean.getCurrNamespace) (← getLevelNames) declId modifiers
     trace[Tltt.inductiveₒ.names] "name = {name}, short_name = {short_name}, levelNames = {levelNames}"
     addDeclarationRanges name declRange
     let constructors ← declCtrs.getArgs.mapM fun ctor => withRef ctor do
       -- `ctor` syntax is
       -- (docComment)? "\n| " modifiers rawIdent optDeclSig
-      let mut ctor_modifiers ← elabModifiers ctor[2]
+      let mut ctor_modifiers ← elabModifiers ⟨ctor[2]⟩
       if let some leadingDocComment := ctor[0].getOptional? then
         if ctor_modifiers.docString?.isSome then
           logErrorAt leadingDocComment "duplicate doc string"
-        ctor_modifiers := { ctor_modifiers with docString? := Lean.TSyntax.getDocString ⟨leadingDocComment⟩ }
+        ctor_modifiers := { ctor_modifiers with docString? := some ⟨leadingDocComment⟩ }
       -- ensure that constructors can be used in pattern matching
       ctor_modifiers := { ctor_modifiers with attrs := ctor_modifiers.attrs.push { name := `match_pattern } }
       let short_ctor_name := ctor.getIdAt 3
       trace[Tltt.inductiveₒ.names] "ctor_name = {short_ctor_name}"
       let ctor_name := name ++ short_ctor_name
-      let ctor_name ← withRef ctor[3] <| applyVisibility ctor_modifiers.visibility ctor_name
+      let ctor_name ← withRef ctor[3] <| applyVisibility ctor_modifiers ctor_name
       let (binders, type?) := expandOptDeclSig ctor[4]
-      Lean.addDocString' ctor_name ctor_modifiers.docString?
-      Lean.Elab.addAuxDeclarationRanges ctor_name ctor ctor[3]
+      Lean.Elab.addDeclarationRangesFromSyntax ctor_name ctor ctor[3]
       return {
         ref := ctor
         modifiers := ctor_modifiers
@@ -745,7 +737,7 @@ namespace InductiveDecl
             unless ← is_obj_type_former type do
               throwErrorAt type_stx "invalid object-inductive type, resultant type is not Typeₒ"
             synthesizeSyntheticMVarsNoPostponing
-            let indices ← addAutoBoundImplicits #[]
+            let indices ← addAutoBoundImplicits #[] none
             mkForallFVars indices type
           addAutoBoundImplicits' params type fun params type => do
             trace[Tltt.inductiveₒ] "header params: {params}, type: {type}"
@@ -765,7 +757,7 @@ namespace InductiveDecl
                               (x : Array Expr → Expr → TermElabM α) : TermElabM α := do
     let type ← mk_type_for header
     withLCtx header.lctx header.localInsts <| withRef header.view.ref do
-      Lean.Elab.Term.withAuxDecl header.view.short_name type header.view.full_name fun indFVar =>
+      Lean.Meta.withAuxDecl header.view.short_name type header.view.full_name fun indFVar =>
         forallTelescopeReducing type fun params _ => do
           x params indFVar
 
@@ -814,7 +806,7 @@ namespace InductiveDecl
               k type
           elabCtorType fun type => do
             synthesizeSyntheticMVarsNoPostponing
-            let ctorParams ← addAutoBoundImplicits ctorParams
+            let ctorParams ← addAutoBoundImplicits ctorParams none
             let except (mvarId : MVarId) := ctorParams.any fun ctorParam =>
               ctorParam.isMVar && ctorParam.mvarId! == mvarId
             let extraCtorParams ← collectUnassignedMVars (← instantiateMVars type) #[] except
@@ -915,6 +907,55 @@ namespace InductiveDecl
       if ctor_view.name == ctor_name then
         return ← withRef ctor_view.ref k
     k
+
+  -- Infer the smallest object universe allowed by the constructor arguments.
+  private def shouldInferResultUniverse (u : Level) : TermElabM (Option LMVarId) := do
+    let u ← instantiateLevelMVars u
+    if u.hasMVar then
+      match u.getLevelOffset with
+      | .mvar mvarId => return some mvarId
+      | _ =>
+        throwError "cannot infer resulting universe level of inductive datatype, given level contains metavariables {Lean.mkSort u}, provide universe explicitly"
+    else
+      return none
+
+  private def mkResultUniverse (us : Array Level) (rOffset : Nat) : Level :=
+    if us.isEmpty && rOffset == 0 then
+      Level.one
+    else
+      let r := Level.mkNaryMax us.toList
+      if rOffset == 0 && !r.isZero && !r.isNeverZero then
+        Lean.mkLevelMax r Level.one |>.normalize
+      else
+        r.normalize
+
+  private def accLevel (u r : Level) (rOffset : Nat) :
+      OptionT (StateT (Array Level) _root_.Id) Unit := do
+    go u rOffset
+  where
+    go (u : Level) (rOffset : Nat) : OptionT (StateT (Array Level) _root_.Id) Unit := do
+      match u, rOffset with
+      | .max u v, rOffset => go u rOffset; go v rOffset
+      | .imax u v, rOffset => go u rOffset; go v rOffset
+      | .zero, _ => return ()
+      | .succ u, rOffset+1 => go u rOffset
+      | u, rOffset =>
+        if rOffset == 0 && u == r then
+          return ()
+        else if r.occurs u then
+          failure
+        else if rOffset > 0 then
+          failure
+        else if (← get).contains u then
+          return ()
+        else
+          modify fun us => us.push u
+
+  private def checkResultingUniverse (u : Level) : TermElabM Unit := do
+    if Lean.Elab.Command.bootstrap.inductiveCheckResultingUniverse.get (← getOptions) then
+      let u ← instantiateLevelMVars u
+      if !u.isZero && !u.isNeverZero then
+        throwError "invalid universe polymorphic type, the resultant universe is not Prop (i.e., 0), but it may be Prop for some parameter values (solution: use 'u+1' or 'max 1 u'){indentD u}"
 
   /--
     Auxiliary function for `updateResultingUniverse`
@@ -1054,10 +1095,12 @@ namespace InductiveDecl
         -- This is copied from `Inductive.lean`. From my understanding, `arity ≥ num_params`, as
         -- the `arity` is the number of parameters `num_params` plus the number of indices. If
         -- both are equal, then there are no indices, so the bitmask is all `false`.
-        return mkArray arity false
-      let mask_ref ← IO.mkRef (mkArray num_params false ++ mkArray num_indices true)
+        return Array.replicate arity false
+      let mask_ref ← IO.mkRef (Array.replicate num_params false ++ Array.replicate num_indices true)
       for ctor in ind_type.constructors do
         forallTelescopeReducing ctor.type fun xs type => do
+          let .app (.const ``lift [_]) type := type
+            | throwError "constructor must return an object-level type{indentExpr type}"
           let type_args := type.getAppArgs
           for i in [num_params:arity] do
             unless i < xs.size && xs[i]! == type_args[i]! do
@@ -1077,7 +1120,7 @@ namespace InductiveDecl
   where
     reset_mask_at (mask : Array Bool) (i : Nat) : Array Bool :=
       if h : i < mask.size then
-        mask.set ⟨i, h⟩ false
+        mask.set i false h
       else
         mask
 
@@ -1161,6 +1204,7 @@ namespace InductiveDecl
     let constr_decl := Declaration.defnDecl constr_def_val
     ensureNoUnassignedMVars constr_decl
     addDecl constr_decl
+    Lean.compileDecls #[constructor.full_name]
 
   def mkElMk (e : Expr) : MetaM Expr := do
     let e_type ← inferType e
@@ -1301,7 +1345,7 @@ namespace InductiveDecl
           goal_type ← mkForallFVars indices goal_type
           goal_type ← mkForallFVars constructors goal_type
           goal_type ← mkForallFVars #[motive] goal_type
-          goal_type ← mkForallFVars parameters goal_type
+          goal_type ← withExplicitToImplicit parameters (mkForallFVars parameters goal_type)
           let rec_type ← instantiateMVars goal_type
           trace[Tltt.inductiveₒ.recₒ] m!"rec_type.{level_names} = {rec_type}"
           -- build goal value
@@ -1318,12 +1362,12 @@ namespace InductiveDecl
               let lifted_motive := Expr.app (.const ``lift [motive_level])
                                    <| .app (mkAppN motive truncated_args) unlifted_x
               mkLambdaFVars (truncated_args ++ #[x]) lifted_motive
-          let mut constr_by_name : HashMap Name ObjConstructor := {}
+          let mut constr_by_name : Std.HashMap Name ObjConstructor := {}
           for constructor in ind_type.constructors do
             constr_by_name := constr_by_name.insert constructor.short_name constructor
           trace[Tltt.inductiveₒ.recₒ] m!"goal_value = {goal_value}"
           goal_value := mkAppN goal_value <| ← constructors.mapM fun constructor_case => do
-            let constructor := constr_by_name.find! (← constructor_case.fvarId!.getUserName)
+            let constructor := constr_by_name[(← constructor_case.fvarId!.getUserName)]!
             -- `constructor_case` might be an `fvar` `cons` that looks like
             --   cons : (hd : α) → (tl : Hello α) → ^(motive tl) → ^(motive (Hello.cons hd tl))
             -- we must produce a `cons'` whose type is
@@ -1398,6 +1442,8 @@ namespace InductiveDecl
           let rec_decl := Declaration.defnDecl def_decl
           ensureNoUnassignedMVars rec_decl
           addDecl rec_decl
+          -- Kernel recursors retain their reduction rules, but have no executable implementation.
+          Lean.modifyEnv (Lean.addNoncomputable · (ind_type.full_name ++ `recₒ))
 
   def mk_obj_inductive_decl (vars : Array Expr) (view : ObjInductiveView) : TermElabM Unit :=
     withoutSavingRecAppSyntax do
@@ -1470,6 +1516,7 @@ namespace InductiveDecl
             let inner_decl := Declaration.inductDecl level_params num_params [inner_ind_type] false
             ensureNoUnassignedMVars inner_decl
             addDecl inner_decl
+            Lean.compileDecls #[ind_type.inner_name]
             let u ← get_obj_resulting_universe ind_type.toPartialObjInductiveType
             let ind_type_value ←
               mkAppN (.const ind_type.inner_name <| ind_type.level_names.map Level.param) params
@@ -1487,6 +1534,7 @@ namespace InductiveDecl
             let obj_decl := Declaration.defnDecl definition_val
             ensureNoUnassignedMVars obj_decl
             addDecl obj_decl
+            Lean.compileDecls #[ind_type.full_name]
             for constructor in ind_type.constructors do
               make_constructor_decl ind_type constructor params
             make_recursor ind_type params
@@ -1496,21 +1544,23 @@ namespace InductiveDecl
   def elab_obj_inductive_view (view : ObjInductiveView) : CommandElabM Unit := do
     let ref := view.ref
     runTermElabM fun vars => Lean.Elab.Term.withDeclName view.full_name do withRef ref do
+      mk_obj_inductive_decl vars view
+      Lean.addDocString' view.full_name view.binders view.modifiers.docString?
       applyAttributes view.full_name view.modifiers.attrs
       for constructor_view in view.constructors do
+        Lean.addDocString' constructor_view.name constructor_view.binders constructor_view.modifiers.docString?
         applyAttributes constructor_view.name constructor_view.modifiers.attrs
-      mk_obj_inductive_decl vars view
     register_inductive_type view.full_name view
   
   @[command_elab obj_inductive_decl]
   def elab_obj_inductive_decl : CommandElab := fun stx => do
-    let modifiers ← elabModifiers stx[0]
+    let modifiers ← elabModifiers ⟨stx[0]⟩
     let declId := stx[2]
     let declSig := stx[3]
     let ctrs := stx[5]
     let range := {
-      range := ← getDeclarationRange stx
-      selectionRange := ← getDeclarationRange <| getDeclarationSelectionRef stx
+      range := (← Lean.Elab.getDeclarationRange? stx).getD default
+      selectionRange := (← Lean.Elab.getDeclarationRange? (getDeclarationSelectionRef stx)).getD default
     }
     let view ← obj_ind_stx_to_view modifiers stx range declId declSig ctrs
     trace[Tltt.inductiveₒ] "{reprPrec view 0}"

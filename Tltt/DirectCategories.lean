@@ -1,7 +1,7 @@
 import Mathlib.CategoryTheory.Category.Basic
 import Mathlib.CategoryTheory.Limits.HasLimits
-import Mathlib.CategoryTheory.Limits.Types
-import Mathlib.CategoryTheory.Limits.Shapes.Types
+import Mathlib.CategoryTheory.Limits.Types.Limits
+import Mathlib.CategoryTheory.Limits.Types.Products
 import Finite
 import Misc
 
@@ -244,7 +244,7 @@ def empty.functor (D : Type _) [DirectCategory D] : Psh (Below D 0) where
   obj x := by
     exfalso
     apply x.unop.not_below_zero
-  map {x _} _ _ := by
+  map {x _} _ := by
     exfalso
     exact x.unop.not_below_zero
   map_id := by
@@ -266,7 +266,6 @@ instance {C : Type*} [DirectCategory C] {P : C → Prop} : DirectCategory { x : 
     map := rank.map
     map_comp := by
       intros
-      simp
       apply rank.map_comp
     map_id := by
       intros
@@ -403,31 +402,15 @@ namespace MatchingObject
     def canonical_cone : Cone <| functor i (restrict₁ X) where
       pt := X.obj <| .op i
       π := {
-        app := fun j => by
-          simp
-          let ⟨⟨_, f, _⟩⟩ := j
-          unfold under.inclusion
-          simp
-          exact X.map f.op
+        app j := X.map (show
+          (↑((under.inclusion D i).obj j.unop) : Below D (rk i + 1)) ⟶
+            Below.in_own_layer i from j.unop.snd.val).op
         naturality := by
           intro a b f
-          let ⟨⟨x, xm, x_neq_i⟩⟩ := a
-          let ⟨⟨y, ym, y_neq_i⟩⟩ := b
-          simp
-          unfold under.inclusion
-          simp
-          have h := f.unop.property
-          simp at h
-          show _ ∘ _ = _
-          dsimp
-          conv =>
-            lhs
-            erw [← h]
-          simp
-          conv =>
-            rhs
-            erw [← X.map_comp]
-          rfl
+          change X.map _ = X.map _ ≫ X.map _
+          erw [← X.map_comp]
+          congr 1
+          exact congrArg Quiver.Hom.op f.unop.property.symm
       }
 
     def canonical : X.obj (.op i) → MatchingObject i (restrict₁ X) :=
@@ -439,8 +422,14 @@ namespace MatchingObject
     def is_unique (q : ∀ j, (limit_cone i (restrict₁ X)).cone.π.app j ∘ f = (canonical_cone i X).π.app j)
                 : f = canonical i X := by
       unfold canonical
-      apply limit_cone i (restrict₁ X) |>.isLimit |>.uniq (s := canonical_cone i X)
-      assumption
+      have h : (↾f : X.obj (.op i) ⟶ MatchingObject i (restrict₁ X)) =
+          (limit_cone i (restrict₁ X)).isLimit.lift (canonical_cone i X) := by
+        apply (limit_cone i (restrict₁ X)).isLimit.uniq (canonical_cone i X)
+        intro j
+        apply ConcreteCategory.ext_apply
+        exact congrFun (q j)
+      exact congrArg (fun g : X.obj (.op i) ⟶ MatchingObject i (restrict₁ X) =>
+        (g : X.obj (.op i) → MatchingObject i (restrict₁ X))) h
     end uniqueness
   end Canonical
   export Canonical (canonical)
@@ -475,10 +464,11 @@ namespace MatchingObject
 end MatchingObject
 
 namespace Presheaf
+universe v w
 @[ext]
 structure LayeredPresheaf (D : Type*) [DirectCategory D] (n : Nat) where
-  X : Psh (Below D n)
-  Y : OfRank D n → Type _
+  X : (Below D n)ᵒᵖ ⥤ Type v
+  Y : OfRank D n → Type w
   u {i : OfRank D n} {j : Below D n} : (j.point ⟶ i.point) → (Y i → X.obj (.op j))
   coh {i : OfRank D n} {j j' : Below D n} (f : j.point ⟶ i.point) (g : j' ⟶ j)
       : (X.map (.op g)) ∘ (u f) = u (g ≫ f)
@@ -506,9 +496,8 @@ def of_psh (F : Psh (Below D (n+1))) : LayeredPresheaf D n where
     simp
   u := by
     intro i j f
-    apply F.map
-    apply Opposite.op
-    exact f
+    change F.obj (.op i.as_below) → F.obj (.op ((Below.inclusion D n).obj j))
+    exact fun x => F.map (show (Below.inclusion D n).obj j ⟶ i.as_below from f).op x
   coh := by
     intro i j j' f g
     simp
@@ -648,7 +637,8 @@ namespace ToPsh
       let k' : OfRank D n := ⟨k.unop.point, by assumption⟩
       let f' : j'.point ⟶ k'.point := f.unop
       let g' : i' ⟶ j' := g.unop
-      have : _ = self.u (f ≫ g).unop := self.coh (i := k') (j := j') (j' := i') f' g'
+      have : _ = self.u (i := k') (j := i') (f ≫ g).unop :=
+        self.coh (i := k') (j := j') (j' := i') f' g'
       rw [← this]
       generalize_proofs
       rename_i pf₁ pf₂ pf₃ pf₄ pf₅
@@ -697,19 +687,20 @@ end ToPsh
 
 def to_psh (self : LayeredPresheaf D n) : Psh (Below D (n+1)) where
   obj := ToPsh.obj self
-  map := ToPsh.map self
-  map_id := ToPsh.map_id self
-  map_comp := ToPsh.map_comp self
+  map f := ↾(ToPsh.map self f)
+  map_id i := by
+    apply ConcreteCategory.ext_apply
+    exact congrFun (ToPsh.map_id self i)
+  map_comp f g := by
+    apply ConcreteCategory.ext_apply
+    exact congrFun (ToPsh.map_comp self f g)
 
 @[simp]
 def left_inv : Function.LeftInverse to_psh (of_psh (D := D) (n := n)) := by
   intro F
-  induction F
-  rename_i a map_id map_comp
-  induction a
-  rename_i obj map
+  induction F with | mk obj map map_id map_comp =>
   apply CategoryTheory.Functor.ext
-  case mk.mk.h_obj =>
+  case h_obj =>
     intro i
     unfold of_psh to_psh ToPsh.obj
     dsimp only
@@ -739,9 +730,7 @@ def left_inv : Function.LeftInverse to_psh (of_psh (D := D) (n := n)) := by
         rfl
       rw [this]
       simp [map_id]
-      apply Eq.symm
-      generalize_proofs
-      apply hello <;> assumption
+      rfl
     · rename_i h₁ h₂
       exfalso
       apply h₂
@@ -752,12 +741,12 @@ def left_inv : Function.LeftInverse to_psh (of_psh (D := D) (n := n)) := by
         apply leq_of_map
         exact f.unop
     · rfl
-    · simp
-      rfl
-where
-  hello {α β : Type _} (p : α = β) (q : β = α) : eqToHom p ∘ id ∘ eqToHom q = id := by
-    induction p
-    rfl
+    · rfl
+
+def left_inv.hello {α β : Type v} (p : α = β) (q : β = α)
+    : eqToHom p ∘ id ∘ eqToHom q = id := by
+  induction p
+  rfl
 
 @[simp]
 def right_inv : Function.RightInverse to_psh (of_psh (D := D) (n := n)) := by
@@ -813,10 +802,11 @@ def right_inv : Function.RightInverse to_psh (of_psh (D := D) (n := n)) := by
       conv => lhs; rw [← h]
       simp
       apply Below.rank_is_lt
-    · generalize_proofs
-      rename_i pf₁ pf₂ pf₃ pf₄ pf₅ pf₆ pf₇
-      show (eqToHom pf₁ ∘ eqToHom pf₄) ∘ u f ∘ (eqToHom pf₆ ∘ eqToHom pf₇) = u f
-      simp
+    · simp only [id, TypeCat.ofHom_apply]
+      change (eqToHom (C := Type _) _ ∘ eqToHom (C := Type _) _) ∘ u f ∘
+        (eqToHom (C := Type _) _ ∘ eqToHom (C := Type _) _) = u f
+      erw [eqToHom_simp, eqToHom_simp]
+      rfl
     · exfalso
       rename_i h
       apply h

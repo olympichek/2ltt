@@ -26,7 +26,7 @@ def sigma_eqv_of_eqv_pre {α α' : Type*} {β : α → Type*} (u : α' ≃ α)
     _ = Σ a, β' (u.symm a) := by
       have : β = β' ∘ u.symm := by
         funext
-        unfold_let β'
+        dsimp only [β', Function.comp_def]
         simp
       rw [this]
       rfl
@@ -81,7 +81,7 @@ def pi_eqv_of_eqv_pre {α α' : Type*} {β : α → Type*} (u : α' ≃ α)
     _ = ∀ a : α, β' (u.symm a) := by
       have : β = β' ∘ u.symm := by
         funext
-        unfold_let β'
+        dsimp only [β', Function.comp_def]
         simp
       rw [this]
       rfl

@@ -4,6 +4,9 @@ import Mathlib.Logic.Equiv.Defs
 
 open Lean.PrettyPrinter (Unexpander)
 
+-- Object-level coercions rely on conversion through semireducible universe wrappers.
+set_option backward.isDefEq.respectTransparency false
+
 noncomputable section
 
 -- This module gives basic definitions, lemmas and axioms of Hott. Since we cannot "cheat" in
@@ -1120,7 +1123,7 @@ section Lemma_4_8_1
     introₒ ⟪⟪x, y⟫, h⟫
     dsimp at h
     simp
-    replace ⟪x, y⟫₊1 with x at h
+    change x =ₒ a at h
     path_inductionₒ h
     rflₒ
 end Lemma_4_8_1
