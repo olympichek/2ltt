@@ -1,6 +1,7 @@
 import Mathlib.Tactic.TypeStar
 import Tltt.DirectCategories
 import Tltt.Reedy.ReedyPresheaf
+import Tltt.Fibrancy.Cofibrancy
 import Tltt.Fibrancy
 import Misc
 
@@ -56,9 +57,12 @@ def Sk (n : Nat) (A : Psh D) : Psh D where
       rw [h₁] at x
       contradiction
 
-variable {n : Nat} (X : ReedyPresheaf D n) in
-def nat_trans_fibrant (A : Psh (Below D n)) : IsFibrantWeak (NatTrans A X.presheaf) := by
-  -- Skeletal functors are useful for this proof.
+universe u v in
+noncomputable def nat_trans_fibrant {D : Type u} [DirectCategory.{u, max u v} D] {n : Nat}
+    (X : ReedyPresheaf D n) (A : Psh (Below D n))
+    (cofibrant_ranks : ∀ k, IsCofibrant.{u, max u v, max u v} (OfRank D k))
+    (cofibrant_values : ∀ i, IsCofibrant.{max u v, max u v, max u v} (A.obj i)) :
+    IsFibrantWeak.{max u v, max u v} (NatTrans A X.presheaf) := by
   sorry
 
 end Tltt.ReedyFibrancy

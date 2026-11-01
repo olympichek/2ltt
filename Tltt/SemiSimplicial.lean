@@ -181,33 +181,71 @@ namespace SemiSimplexCat
         intro b
         exact Subsingleton.elim _ b
     }
+  @[instance_reducible]
+  def finite_hom (n m : SemiSimplexCat) : Finite (n ⟶ m) := by
+    classical
+    letI : Fintype (n ⟶ m) :=
+      inferInstanceAs (Fintype { f : Fin n → Fin m // ∀ x y, x < y → f x < f y })
+    exact Finite.of_fintype _
 end SemiSimplexCat
 
-def finite_reedy_presheaf_is_fibrant (D : Type*) [DirectCategory D] [DecidableEq D] (n : Nat)
-                                     (p : ∀ n, Finite (OfRank D n))
-                                     : IsFibrantWeak (ReedyPresheaf D n) := by
+section
+universe u v
+
+/-- Cofibrant ranks and incoming hom types make matching objects fibrant.
+The extension families use cofibrancy of each rank one universe higher, at the
+universe of inner type codes. -/
+@[instance_reducible]
+def cofibrant_reedy_presheaf_is_fibrant (D : Type u)
+    [DirectCategory.{u, max u v} D] (n : Nat)
+    (cofibrant_ranks : ∀ k, IsCofibrant.{u, max u v, max u v} (OfRank D k))
+    (cofibrant_code_ranks : ∀ k,
+      IsCofibrant.{u, (max u v)+1, (max u v)+1} (OfRank D k))
+    (cofibrant_homs : ∀ i j : D,
+      IsCofibrant.{max u v, max u v, max u v} (i ⟶ j)) :
+    IsFibrantWeak.{(max u v)+1, (max u v)+1} (ReedyPresheaf D n) := by
   induction n with
   | zero =>
     apply fib_below_zero
   | succ n ih =>
     apply fibrant_of_eqv_fibrant (α := SigmaCompactLRP D n)
-    · apply sigma_fibrant
+    · apply sigma_fibrant.{(max u v)+1, (max u v)+1, (max u v)+1, (max u v)+1}
       · assumption
       · intro X
-        apply fintype_is_cofibrant
+        apply (cofibrant_code_ranks n).pi_fibrant
         intro x
-        apply pi_fibrant
+        apply pi_fibrant.{max u v, (max u v)+1, max u v, (max u v)+1}
         · induction x with | mk x rk_x_eq_n =>
           induction rk_x_eq_n
-          apply matching_object_fibrant
+          exact matching_object_fibrant x X cofibrant_ranks (fun j => cofibrant_homs j x)
         · intro
           apply fibrant_weakening
           apply lift_is_fibrant
     · apply Equiv.symm
       apply rdpsh_eqv_compact
 
+/-- Finite ranks and hom types supply cofibrancy at both required universes. -/
+def finite_reedy_presheaf_is_fibrant (D : Type u)
+    [DirectCategory.{u, max u v} D] [DecidableEq D] (n : Nat)
+    (finite_ranks : ∀ k, Finite (OfRank D k))
+    (finite_homs : ∀ i j : D, Finite (i ⟶ j)) :
+    IsFibrantWeak.{(max u v)+1, (max u v)+1} (ReedyPresheaf D n) := by
+  apply cofibrant_reedy_presheaf_is_fibrant D n
+  · intro k
+    letI := finite_ranks k
+    exact finite_is_cofibrant _
+  · intro k
+    letI := finite_ranks k
+    exact finite_is_cofibrant _
+  · intro i j
+    letI := finite_homs i j
+    exact finite_is_cofibrant _
+
+end
+
 def SemiSimplicialType (n : ℕ) : Typeₒ :=
-  finite_reedy_presheaf_is_fibrant SemiSimplexCat n SemiSimplexCat.finite_rank |>.obj_type
+  finite_reedy_presheaf_is_fibrant SemiSimplexCat n
+    SemiSimplexCat.finite_rank SemiSimplexCat.finite_hom |>.obj_type
 
 end Tltt
 end

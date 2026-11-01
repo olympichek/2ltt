@@ -14,6 +14,11 @@ macro " |" e:term "| " : term =>
   `(card $e)
 
 namespace Finite
+@[instance_reducible]
+noncomputable def of_fintype (α : Type*) [Fintype α] : Finite α where
+  card := Fintype.card α
+  equiv := Fintype.equivFin α
+
 instance (n : Nat) : Finite (Fin n) where
   card := n
   equiv := {

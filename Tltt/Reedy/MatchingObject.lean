@@ -198,12 +198,22 @@ def MatchObj.canonical (F : Psh J) (j : J) : F.obj (.op j) → MatchObj j (restr
   apply restrict₆
   exact bj_to_yj ≫ yj_to_F
 
+section Fibrancy
+  universe u v
+  variable {J : Type u} [DirectCategory.{u, max u v} J]
+
 section
   variable {n : Nat} (X : ReedyPresheaf J n)
 
-  def limit_is_fibrant (C : Cone X.presheaf) (p : IsLimit C) : IsFibrantWeak C.pt := by
+  def limit_is_fibrant (C : Cone X.presheaf) (p : IsLimit C)
+      (cofibrant_ranks : ∀ k, IsCofibrant.{u, max u v, max u v} (OfRank J k)) :
+      IsFibrantWeak.{max u v, max u v} C.pt := by
     apply fibrant_of_eqv_fibrant (α := NatTrans (constPUnitFunctor _) X.presheaf)
-    · apply nat_trans_fibrant
+    · apply nat_trans_fibrant _ _ cofibrant_ranks
+      intro j
+      change IsCofibrant PUnit
+      letI : Finite PUnit := Finite.of_fintype _
+      exact finite_is_cofibrant _
     · apply toEquiv
       apply conePointUniqueUpToIso (s := cone_of_nat_unit _)
       apply cone_of_nat_unit_is_lim
@@ -212,15 +222,25 @@ end
 
 section
   variable (i : J) (X : ReedyPresheaf J (rk i))
-  
-  def match_obj_fibrant : IsFibrantWeak (MatchObj i X.presheaf) := by
-    apply nat_trans_fibrant
 
-  def matching_object_fibrant : IsFibrantWeak (MatchingObject i X.presheaf) := by
+  def match_obj_fibrant
+      (cofibrant_ranks : ∀ k, IsCofibrant.{u, max u v, max u v} (OfRank J k))
+      (cofibrant_homs : ∀ j : J, IsCofibrant.{max u v, max u v, max u v} (j ⟶ i)) :
+      IsFibrantWeak.{max u v, max u v} (MatchObj i X.presheaf) := by
+    classical
+    apply nat_trans_fibrant _ _ cofibrant_ranks
+    intro j
+    exact cofibrant_subtype_const (cofibrant_homs j.unop.point) (j.unop.point ≠ i)
+
+  def matching_object_fibrant
+      (cofibrant_ranks : ∀ k, IsCofibrant.{u, max u v, max u v} (OfRank J k))
+      (cofibrant_homs : ∀ j : J, IsCofibrant.{max u v, max u v, max u v} (j ⟶ i)) :
+      IsFibrantWeak.{max u v, max u v} (MatchingObject i X.presheaf) := by
     apply fibrant_of_eqv_fibrant (α := MatchObj i X.presheaf)
-    · apply match_obj_fibrant
+    · exact match_obj_fibrant i X cofibrant_ranks cofibrant_homs
     · apply match_obj_eqv
 end
+end Fibrancy
 
 end Tltt.ReedyFibrancy
 end
