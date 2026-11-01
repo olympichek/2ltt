@@ -1,7 +1,6 @@
 import Mathlib.Tactic.TypeStar
 import Tltt.DirectCategories
-import Tltt.Reedy.ReedyPresheaf
-import Tltt.Fibrancy.Cofibrancy
+import Tltt.Reedy.NaturalTransformation
 import Tltt.Fibrancy
 import Misc
 
@@ -62,7 +61,8 @@ noncomputable def nat_trans_fibrant {D : Type u} [DirectCategory.{u, max u v} D]
     (X : ReedyPresheaf D n) (A : Psh (Below D n))
     (cofibrant_ranks : ∀ k, IsCofibrant.{u, max u v, max u v} (OfRank D k))
     (cofibrant_values : ∀ i, IsCofibrant.{max u v, max u v, max u v} (A.obj i)) :
-    IsFibrantWeak.{max u v, max u v} (NatTrans A X.presheaf) := by
-  sorry
+    IsFibrantWeak.{max u v, max u v} (NatTrans A X.presheaf) :=
+  NatTransExtension.nat_trans_fibrant_of_pi (fun k => (cofibrant_ranks k).toIsPiFibrant) X A
+    (fun i => (cofibrant_values i).toIsPiFibrant)
 
 end Tltt.ReedyFibrancy
