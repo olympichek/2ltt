@@ -16,3 +16,5 @@ lake test
 #+end_src
 
 The Nix development shell supplies elan, which selects the compiler from =lean-toolchain=.
+
+The [[https://github.com/olympichek/2ltt/actions/workflows/ci.yml][CI workflow]] runs =lake build= and =lake test= on pushes and pull requests.
